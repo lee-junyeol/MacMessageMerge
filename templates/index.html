@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <main class="shell">
+    <header class="header">
+      <div>
+        <div class="eyebrow">{{ app_name }} · v{{ app_version }}</div>
+        <h1>macOS 메시지 개인화 발송</h1>
+        <p>CSV 또는 직접 입력으로 수신자를 추가하고, 각 수신자마다 새 메시지를 시작해 전송합니다.</p>
+      </div>
+      <button class="button secondary" id="diagnosticsBtn" type="button">연동 확인</button>
+    </header>
+
+    <div class="notice">
+      <strong>로컬 전용</strong>
+      <span>연락처와 메시지는 서버에 저장하지 않습니다. 이 페이지는 현재 Mac의 127.0.0.1에서만 실행됩니다.</span>
+    </div>
+
+    <div class="layout">
+      <section class="column">
+        <div class="panel">
+          <div class="panel-title"><span>1</span><div><h2>수신자 추가</h2><p>직접 입력하거나 CSV를 불러오세요.</p></div></div>
+          <form id="manualForm" class="stack">
+            <label>이름<input id="nameInput" type="text" autocomplete="off" placeholder="홍길동" required></label>
+            <label>전화번호<input id="phoneInput" type="tel" autocomplete="off" placeholder="010-1234-5678" required></label>
+            <button class="button primary" type="submit">수신자 추가</button>
+          </form>
+          <div class="divider"><span>또는</span></div>
+          <form id="csvForm" class="stack">
+            <label>CSV 파일<input id="csvInput" type="file" accept=".csv,text/csv" required></label>
+            <p class="help">헤더가 있으면 <code>이름</code>/<code>성명</code>/<code>name</code>, <code>전화번호</code>/<code>휴대폰</code>/<code>phone</code> 등을 자동 인식합니다.</p>
+            <button class="button secondary" id="csvButton" type="submit">CSV 불러오기</button>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title row-title">
+            <span>2</span><div><h2>수신자</h2><p><strong id="recipientCount">0</strong>명</p></div>
+            <button class="text-button" id="clearBtn" type="button">전체 비우기</button>
+          </div>
+          <div id="recipientList" class="recipient-list"><div class="empty">아직 수신자가 없습니다.</div></div>
+        </div>
+      </section>
+
+      <section class="column">
+        <div class="panel sticky-panel">
+          <div class="panel-title"><span>3</span><div><h2>메시지 작성</h2><p><code>{name}</code>, <code>{phone}</code>을 사용할 수 있습니다.</p></div></div>
+          <div class="merge-box"><code>{name}님, 안녕하세요.</code><span>→ 수신자별 이름으로 자동 치환</span></div>
+          <label>메시지 내용
+            <textarea id="messageInput" maxlength="2000" placeholder="{name}님, 안녕하세요.&#10;&#10;보내실 내용을 입력하세요."></textarea>
+          </label>
+          <div class="meta"><span id="preview">수신자를 추가하면 미리보기가 표시됩니다.</span><span><b id="charCount">0</b>/2000</span></div>
+          <div class="send-note"><strong>항상 새 메시지로 시작</strong><p>각 수신자마다 Messages에서 ⌘N을 실행한 뒤 번호와 본문을 입력합니다. 실제 발신 ID는 Messages의 ‘새로운 대화 시작’ 설정을 따릅니다.</p></div>
+          <button class="button primary large" id="sendBtn" type="button">메시지 보내기</button>
+        </div>
+
+        <div class="panel" id="resultsPanel" hidden>
+          <div class="panel-title"><span>✓</span><div><h2>전송 결과</h2><p id="resultSummary"></p></div></div>
+          <div id="resultsList" class="results-list"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="diagnosticsDialog">
+    <div class="dialog-head"><h2>연동 확인</h2><button id="closeDialogBtn" class="icon-button" type="button" aria-label="닫기">×</button></div>
+    <div id="diagnosticsContent" class="diagnostics"></div>
+  </dialog>
+
+  <div id="loading" class="loading" hidden><div class="loading-card"><div class="spinner"></div><strong>메시지 전송 중</strong><span id="loadingText"></span></div></div>
+  <div id="toast" class="toast" hidden></div>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
