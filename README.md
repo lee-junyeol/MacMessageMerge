@@ -1,284 +1,127 @@
 # MacMessageMerge
 
-macOS **Messages** 앱을 이용해 여러 수신자에게 개인화된 메시지를 순차 전송하는 로컬 웹앱입니다.
+CSV의 이름·전화번호를 메시지에 반영하고 macOS Messages 앱으로 순차 발송하는 로컬 웹앱입니다. Flask 화면과 AppleScript UI 자동화를 연결합니다.
 
-CSV에서 이름과 전화번호를 불러오고, 메시지 안의 `{name}`과 `{phone}`을 수신자별 값으로 치환합니다. 각 수신자마다 Messages에서 **Command-N(새 메시지)** 으로 새 작성 화면을 연 뒤 전송합니다.
+## 해결하려는 문제
 
-> **중요:** 이 프로젝트는 GitHub Pages, Vercel, Render 같은 웹 서버에 배포해서 사용하는 앱이 아닙니다. GitHub는 **소스 코드와 릴리즈 파일을 배포하는 곳**이고, 실제 프로그램은 Messages가 설치된 **사용자의 Mac에서 로컬로 실행**해야 합니다.
+여러 사람에게 이름이 들어간 안내를 보낼 때 수신자와 본문을 반복 입력해야 합니다. 이 앱은 CSV 파싱·전화번호 정규화·변수 치환을 처리하고, 수신자마다 Messages의 새 작성 화면을 여는 방식으로 반복 작업을 줄입니다.
+
+공식 메시지 발송 API가 아닌 UI 자동화입니다. 실제 발송에는 사용자의 Mac, Messages 설정과 자동화 권한이 필요합니다.
 
 ## 주요 기능
 
-- CSV 대량 수신자 불러오기
-- UTF-8 / UTF-8 BOM / CP949 / EUC-KR CSV 지원
-- 이름/전화번호 헤더 자동 인식
-- `{name}`, `{phone}` 개인화 변수
-- 수신자마다 항상 Command-N으로 새 메시지 작성
-- 클립보드 대신 Accessibility `AXValue`에 본문을 직접 입력
-- AppleScript 문법, Messages 접근, 손쉬운 사용 권한 진단
-- 연락처/CSV/메시지 내용을 디스크에 저장하지 않음
-- 외부 CDN이나 외부 API 없이 완전 로컬 실행
-- Waitress를 `127.0.0.1`에만 바인딩
+- 수신자 직접 추가와 CSV 불러오기
+- UTF-8/BOM·CP949·EUC-KR 해석, 헤더·구분자 인식, 전화번호 정규화와 CSV 중복 번호 제외
+- `{name}`, `{phone}` 치환과 첫 수신자 기준 본문 미리보기
+- 발송 전 확인 대화상자와 수신자별 처리 결과 표시
+- AppleScript 문법·손쉬운 사용 권한·Messages 접근 진단
+- 요청당 최대 300명, 업로드 최대 2MiB, 본문 템플릿 최대 2000자 제한
 
-## 시스템 요구사항
+## 화면과 사용 흐름
 
-- macOS
-- Python **3.9 이상**
-- macOS 기본 **Messages** 앱
-- iMessage 사용 시 Apple Account 로그인
-- SMS/MMS/RCS 사용 시 iPhone과 Mac에서 같은 Apple Account를 사용하고 iPhone의 **문자 메시지 전달(Text Message Forwarding)** 설정 필요
+공개 웹 데모는 없습니다. Messages가 설치된 Mac에서 실행한 뒤 `http://127.0.0.1:5001`에 접속합니다. GitHub Pages 같은 정적 호스팅에서 이 앱의 발송 기능을 실행할 수는 없습니다.
 
-### macOS 호환성 정책
+1. **수신자 추가**에서 직접 입력하거나 CSV를 불러옵니다.
+2. **메시지 작성**에서 변수를 포함한 내용을 입력하고 미리보기를 확인합니다.
+3. **연동 확인**으로 환경을 점검한 뒤, 실제 발송 확인 대화상자에서 진행 여부를 선택합니다.
+4. **전송 결과**에서 수신자별 처리 성공·실패와 조기 중단 여부를 확인합니다.
 
-이 프로젝트는 Messages의 Accessibility UI를 자동화하므로 macOS 업데이트에 따라 UI 구조가 달라지면 수정이 필요할 수 있습니다.
+화면은 [index.html](templates/index.html), 브라우저 상태와 API 요청은 [app.js](static/js/app.js)에 있습니다. 개인정보가 포함된 실제 발송 화면을 공개 예제로 사용하지 않습니다.
 
-| macOS | 프로젝트 지원 정책 | 비고 |
-|---|---|---|
-| macOS Tahoe 26 | **주 지원 대상** | 현재 Messages UI 계열을 기준으로 유지 권장 |
-| macOS Sequoia 15 | 제한적 지원 | 동작 가능하나 릴리즈별 검증 필요 |
-| macOS Sonoma 14 이하 | 미지원 | UI 구조 차이로 보장하지 않음 |
+## 기술 스택
 
-새 macOS 버전으로 업데이트한 직후에는 먼저 **연동 확인**과 본인 번호 1건 테스트를 권장합니다.
+| 영역 | 사용 기술 |
+|---|---|
+| 로컬 서버 | Python 3.9 이상, Flask 3.1 계열, Waitress 3 계열 |
+| 화면 | HTML, CSS, JavaScript, Fetch API |
+| Messages 연동 | AppleScript, osascript, macOS Accessibility |
+| CSV·검증 | Python 표준 csv·re·unittest |
 
-현재 Mac 버전 확인:
+실행 의존성 범위는 [requirements.txt](requirements.txt)에 있습니다.
 
-```bash
-sw_vers
+## 구조와 주요 설계
+
+```mermaid
+flowchart LR
+  Browser[브라우저: 수신자와 미리보기] --> API[Flask API]
+  API --> CSV[CSV 파싱·번호 검증]
+  API --> Merge[변수 치환]
+  Merge --> Sender[Python subprocess]
+  Sender --> Script[AppleScript]
+  Script --> Messages[macOS Messages UI]
 ```
 
-## 설치
+**입력 처리와 발송을 나눴습니다.** [csv_parser.py](csv_parser.py)는 인코딩·헤더·전화번호를 처리하고 [message_utils.py](message_utils.py)는 변수를 치환합니다. [app.py](app.py)는 업로드와 발송 입력을 검사하고, [sender.py](sender.py)가 AppleScript 실행 결과를 공통 형식으로 반환합니다.
 
-### 1. 저장소 받기
+**클립보드 대신 입력 영역의 값을 설정합니다.** [send_message.applescript](scripts/send_message.applescript)는 수신자마다 `Command-N`으로 새 작성 화면을 열고 본문 영역의 `AXValue`에 Unicode 텍스트를 설정합니다. 값을 다시 읽어 본문이 일치하는지 확인한 뒤 Return을 입력합니다. 입력 영역·본문·포커스 관련 지정 오류는 해당 요청의 나머지 발송을 중단합니다. 모든 종류의 실패가 전체 중단으로 이어지는 것은 아닙니다.
+
+**앱 서버의 외부 접근을 제한합니다.** Waitress는 `127.0.0.1`에 바인딩하고, 허용되지 않은 Origin의 변경 요청을 거부하며 CSP 등 응답 헤더를 설정합니다. CSV·수신자 목록·본문을 앱 DB나 파일에 보관하는 기능은 없습니다. 외부 HTTP API나 CDN도 호출하지 않습니다. 다만 Messages의 대화 기록과 macOS 동작, 앱 진단 로그까지 저장되지 않는다는 뜻은 아닙니다.
+
+## 설치와 실행
+
+준비물은 macOS, Python 3.9 이상, 사용 설정을 마친 Messages입니다. 특정 macOS 버전에서의 발송 성공을 보증하는 호환성 테스트 자료는 포함되어 있지 않습니다.
 
 ```bash
 git clone https://github.com/lee-junyeol/MacMessageMerge.git
 cd MacMessageMerge
-```
-
-또는 GitHub Releases에서 소스 ZIP을 받아 압축을 풉니다.
-
-### 2. 실행 권한 부여
-
-```bash
 chmod +x run.sh
-```
-
-### 3. 실행
-
-```bash
 ./run.sh
 ```
 
-처음 실행할 때 `.venv` 가상환경을 만들고 필요한 Python 패키지를 설치합니다. 이후에는 브라우저가 자동으로 다음 주소를 엽니다.
+[run.sh](run.sh)는 `.venv`를 만들고 의존성을 설치한 뒤 브라우저를 엽니다. 기본 주소는 `http://127.0.0.1:5001`이고 종료는 터미널에서 `Ctrl+C`입니다. 포트는 `PORT` 환경변수로 변경할 수 있습니다.
 
-```text
-http://127.0.0.1:5001
-```
+### macOS 권한과 Messages 설정
 
-종료하려면 실행 중인 터미널에서 `Ctrl+C`를 누릅니다.
+1. 시스템 설정의 **개인정보 보호 및 보안 → 손쉬운 사용**에서 실행 터미널의 UI 자동화를 허용합니다.
+2. 자동화 권한 요청이 나타나면 Messages/System Events 제어를 허용합니다.
+3. 앱의 **연동 확인** 결과를 확인합니다. 권한 변경 후 실행 프로그램을 다시 시작해야 할 수 있습니다.
 
-## macOS 권한 설정
+발신 ID와 실제 전송 경로는 Messages 및 사용자의 Apple·통신사 설정에 따릅니다. 앱이 발신 번호를 강제로 지정하지 않습니다. 문자 전달 설정은 [Apple Messages 안내](https://support.apple.com/guide/messages/set-up-messages-on-mac-ichte16154fb/mac)를 참고하세요. 수신 동의를 받은 대상에게만 사용하고, 본인 번호 한 건으로 환경을 확인한 뒤 사용해야 합니다.
 
-이 앱은 Messages 화면을 직접 조작하므로 macOS 권한이 필요합니다.
-
-1. **시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용**
-2. Terminal, iTerm 또는 이 앱을 실행한 프로그램의 접근 허용
-3. **시스템 설정 → 개인정보 보호 및 보안 → 자동화**에서 Messages/System Events 제어 요청이 표시되면 허용
-4. 웹앱의 **연동 확인** 버튼을 눌러 상태 확인
-
-권한을 바꾼 뒤에는 터미널과 앱을 완전히 종료했다가 다시 실행하는 편이 안전합니다.
-
-## Messages 설정
-
-프로그램은 발신 번호나 이메일을 AppleScript에서 강제로 지정하지 않습니다. 새 메시지의 발신 ID는 Messages/iMessage의 **새로운 대화 시작(Start New Conversations From)** 설정을 따릅니다.
-
-SMS/MMS/RCS까지 Mac에서 보내려면 iPhone에서 문자 메시지 전달을 켜야 합니다.
-
-## CSV 형식
-
-기본 형식:
+### CSV와 변수
 
 ```csv
 이름,전화번호
-김민수,010-1234-5678
-이영희,010-2345-6789
+예시이름,010-0000-0000
 ```
-
-인식 가능한 이름 헤더 예:
-
-```text
-이름, 성명, name
-```
-
-인식 가능한 전화번호 헤더 예:
-
-```text
-전화번호, 휴대폰, 핸드폰, 연락처, 전화, phone, mobile, tel
-```
-
-헤더가 없으면 첫 번째 열을 이름, 두 번째 열을 전화번호로 읽습니다. 한 번에 최대 300명까지 처리합니다.
-
-## 개인화 메시지
 
 ```text
 {name}님, 안녕하세요.
-안내드릴 내용이 있어 연락드립니다.
+등록된 연락처는 {phone}입니다.
 ```
 
-김민수에게는:
+이름 헤더는 `이름`, `성명`, `name`, 전화번호는 `전화번호`, `휴대폰`, `연락처`, `phone`, `mobile`, `tel` 등을 인식합니다. 헤더를 찾지 못하면 첫 열을 이름, 두 번째 열을 번호로 사용합니다. 유효하지 않거나 중복된 CSV 행은 제외하며 제외 건수를 반환합니다. 예시 번호는 발송 테스트용 수신자가 아닙니다.
 
-```text
-김민수님, 안녕하세요.
-안내드릴 내용이 있어 연락드립니다.
-```
+## 테스트와 검증
 
-사용 가능한 변수:
-
-- `{name}` — 수신자 이름
-- `{phone}` — 수신자 전화번호
-
-## 전송 방식
-
-수신자마다 다음 순서로 동작합니다.
-
-1. Messages 활성화
-2. `Command-N`으로 새 메시지 작성
-3. 전화번호 입력 및 확정
-4. Accessibility UI에서 실제 본문 입력 영역 탐색
-5. `AXValue`에 Unicode 본문 직접 설정
-6. 입력된 본문을 다시 읽어 검증
-7. Return으로 전송
-
-본문을 검증할 수 없거나 작성 영역을 찾지 못하면 해당 상황에서 전송을 중단합니다. 잘못된 곳에 본문을 입력하거나 파일 형태의 클립보드 데이터가 전송되는 것을 피하기 위한 동작입니다.
-
-## 개인정보와 보안
-
-- CSV 파일은 메모리에서만 파싱하며 저장하지 않습니다.
-- 연락처 목록은 브라우저를 새로 열면 초기화됩니다.
-- 메시지 본문은 로그에 저장하지 않습니다.
-- 로그에는 마스킹된 번호와 메시지 길이 같은 진단 정보만 기록합니다.
-- 웹 서버는 `127.0.0.1`에만 열립니다.
-- 앱은 외부 HTTP API를 호출하지 않습니다.
-
-로그 위치:
-
-```text
-~/Library/Logs/MacMessageMerge/app.log
-```
-
-## 문제 해결
-
-### 연동 확인에서 손쉬운 사용 권한이 필요하다고 나옴
-
-**시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용**에서 현재 앱을 실행한 Terminal/iTerm을 허용하세요.
-
-### Messages 자동화 접근 실패
-
-**시스템 설정 → 개인정보 보호 및 보안 → 자동화**를 확인하고, Terminal/iTerm의 Messages 제어를 허용하세요.
-
-### AppleScript 문법 검사 실패
-
-GitHub Issue를 열 때 다음 정보를 함께 적어주세요. 개인정보는 제거해야 합니다.
+CSV·번호 검증·변수 치환 테스트는 Messages를 조작하지 않습니다.
 
 ```bash
-sw_vers
-uname -m
+python3 -B -m unittest discover -s tests -v
 ```
 
-그리고 웹앱의 **연동 확인** 결과에서 전화번호나 메시지 내용 없이 오류 문구만 첨부하세요.
-
-### 메시지 입력칸을 찾지 못함 (Code 10002)
-
-macOS Messages의 Accessibility UI 구조가 프로젝트가 예상한 형태와 다른 경우입니다. macOS 버전과 오류 로그를 확인해 `scripts/send_message.applescript`의 입력영역 탐색 로직을 조정해야 합니다.
-
-### SMS/MMS/RCS가 Mac에서 보내지지 않음
-
-iPhone과 Mac의 Apple Account가 같은지, iPhone에서 iMessage와 **문자 메시지 전달**이 켜져 있는지 확인하세요.
-
-## 테스트
-
-AppleScript를 제외한 CSV/개인화 핵심 로직 테스트:
-
-```bash
-.venv/bin/python -m unittest discover -s tests -v
-```
-
-AppleScript 문법은 macOS에서 다음 명령으로 확인할 수 있습니다.
+AppleScript 문법 검사도 발송 없이 실행할 수 있습니다.
 
 ```bash
 osacompile -o /tmp/MacMessageMerge.scpt scripts/send_message.applescript
 ```
 
-웹앱의 **연동 확인** 버튼도 같은 문법 검사를 수행합니다.
+2026-11-13 문서 점검에서 [기존 단위 테스트](tests/test_core.py) 5개와 AppleScript 컴파일이 통과했습니다. 컴파일 중 실행 환경의 입력 서비스 경고가 있었으며, 실제 Messages 제어·발송·OS별 호환성은 검증하지 않았습니다. 자동 CI workflow는 없습니다.
 
-## 업데이트
+## 현재 상태와 알려진 한계
 
-Git으로 설치했다면:
+- UI 자동화이므로 macOS/Messages 업데이트, 창 상태와 포커스에 따라 실패할 수 있습니다. 발송 중 다른 창이나 Messages를 조작하지 마세요.
+- 처리 성공은 AppleScript가 Return 입력 후 정상 반환했다는 의미입니다. 실제 배달·수신 확인 기능은 없습니다.
+- 하나의 요청 안에서는 순차 처리하지만 여러 탭·클라이언트의 동시 발송을 직렬화하는 전역 잠금은 없습니다. 동시에 여러 발송을 실행하지 마세요.
+- 같은 상대의 메시지는 Messages에서 기존 대화 스레드와 합쳐 보일 수 있습니다. 매번 새 작성 동작을 수행하는 것과 새 대화 기록을 보장하는 것은 다릅니다.
+- 진단 로그는 `~/Library/Logs/MacMessageMerge/app.log`에 기록됩니다. 일반 발송 로그는 번호를 마스킹하고 본문 대신 길이를 기록합니다. 오류 보고 전에는 로그의 개인정보를 직접 확인·제거하세요.
+- macOS 권한, 실제 메시지 경로·비용과 전달 상태는 앱의 단위 테스트 범위 밖입니다.
 
-```bash
-git pull
-./run.sh
-```
+## 관련 링크와 라이선스
 
-`requirements.txt`가 변경되면 `run.sh`이 필요한 패키지를 다시 설치합니다.
+- [변경 이력](CHANGELOG.md), [보안 안내](SECURITY.md)
+- [Apple 메시지 보내기 안내](https://support.apple.com/guide/messages/send-messages-icht35827/mac)
+- [Apple 키보드 단축키](https://support.apple.com/guide/messages/keyboard-shortcuts-ichtc78b3bff/mac)
+- [Apple 손쉬운 사용 권한 안내](https://support.apple.com/guide/mac-help/allow-accessibility-apps-to-access-your-mac-mh43185/mac)
 
-## GitHub에 올리기
-
-새 저장소를 만든 뒤:
-
-```bash
-git init
-git add .
-git commit -m "Initial release"
-git branch -M main
-git remote add origin https://github.com/lee-junyeol/MacMessageMerge.git
-git push -u origin main
-```
-
-공개 배포 시에는 **GitHub Releases**에서 버전 태그(`v1.0.0`)를 만들고 소스 ZIP을 배포하는 방식을 권장합니다.
-
-> GitHub Pages에는 정적 안내 페이지를 만들 수는 있지만, 이 앱 자체를 Pages에서 실행해 Messages를 제어할 수는 없습니다.
-
-## 프로젝트 구조
-
-```text
-MacMessageMerge/
-├── app.py
-├── sender.py
-├── csv_parser.py
-├── message_utils.py
-├── requirements.txt
-├── run.sh
-├── scripts/
-│   └── send_message.applescript
-├── templates/
-│   └── index.html
-├── static/
-│   ├── css/style.css
-│   └── js/app.js
-├── tests/
-│   └── test_core.py
-├── sample_contacts.csv
-├── CHANGELOG.md
-├── SECURITY.md
-├── LICENSE
-└── .gitignore
-```
-
-## 제한사항
-
-- Apple이 제공하는 공식 대량 메시지 API를 사용하는 앱이 아니라 **macOS UI 자동화**입니다.
-- macOS/Messages 업데이트로 UI 구조가 바뀌면 전송 로직 수정이 필요할 수 있습니다.
-- 같은 상대와의 메시지는 Messages가 기존 대화 기록과 한 스레드로 표시할 수 있습니다. 이 앱이 보장하는 것은 매 전송 시 새 작성 동작을 시작하는 것입니다.
-- 실제 전송 경로(iMessage/SMS/MMS/RCS), 요금, 이동통신사 정책은 Messages와 사용자의 Apple/통신사 설정에 따릅니다.
-- 수신 동의를 받은 대상에게만 사용하고, 스팸·괴롭힘·무단 광고 발송에 사용하지 마세요.
-
-## 라이선스
-
-MIT License. `LICENSE` 참고.
-
-## 참고
-
-- Apple Messages User Guide — Send a message on Mac: https://support.apple.com/guide/messages/send-messages-icht35827/mac
-- Apple Messages User Guide — Keyboard shortcuts: https://support.apple.com/guide/messages/keyboard-shortcuts-ichtc78b3bff/mac
-- Apple Support — Set up Messages on Mac / Text Message Forwarding: https://support.apple.com/guide/messages/set-up-messages-on-mac-ichte16154fb/mac
-- Apple Support — Accessibility permission: https://support.apple.com/guide/mac-help/allow-accessibility-apps-to-access-your-mac-mh43185/mac
+MIT License. Copyright (c) 2026 Lee Junyeol. 자세한 조건은 [LICENSE](LICENSE)를 확인하세요.
